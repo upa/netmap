@@ -219,6 +219,12 @@ struct netmap_slot {
 	 * The 'len' field refers to the individual fragment.
 	 */
 
+#define NS_PHY_INDIRECT	0x0040	/* indirect buffer by physical address */
+        /*
+	 * data is in any buffer, whose PHYSICAL address is in the
+	 * 'ptr' field in the slot.
+	 */
+
 #define	NS_PORT_SHIFT	8
 #define	NS_PORT_MASK	(0xff << NS_PORT_SHIFT)
 	/*

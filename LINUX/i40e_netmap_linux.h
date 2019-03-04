@@ -370,11 +370,18 @@ i40e_netmap_txsync(struct netmap_kring *kring, int flags)
 			struct netmap_slot *slot = &ring->slot[nm_i];
 			u_int len = slot->len;
 			uint64_t paddr;
-			void *addr = PNMB(na, slot, &paddr);
+			void *addr;
 
 			/* device-specific */
 			struct i40e_tx_desc *curr = I40E_TX_DESC(txr, nic_i);
 			u64 hw_flags = 0;
+
+			/* set addresses */
+			if (slot->flags & NS_PHY_INDIRECT) {
+				addr = phys_to_virt(slot->ptr);
+				paddr = slot->ptr;
+			} else
+				addr = PNMB(na, slot, &paddr);
 
 			/* prefetch for next round */
 			__builtin_prefetch(&ring->slot[nm_i + 1]);
@@ -438,7 +445,11 @@ i40e_netmap_txsync(struct netmap_kring *kring, int flags)
 		for ( ; tosync != nm_i; tosync = nm_next(tosync, lim)) {
 			struct netmap_slot *slot = &ring->slot[tosync];
 			uint64_t paddr;
-			(void)PNMB(na, slot, &paddr);
+
+			if (slot->flags & NS_PHY_INDIRECT)
+				paddr = slot->ptr;
+			else
+				(void)PNMB(na, slot, &paddr);
 
 			netmap_sync_map_cpu(na, (bus_dma_tag_t) na->pdev,
 					&paddr, slot->len, NR_TX);
@@ -549,8 +560,16 @@ i40e_netmap_rxsync(struct netmap_kring *kring, int flags)
 			} else {
 				complete = 1;
 			}
+
+			if (slot->flags & NS_PHY_INDIRECT)
+				slot_flags |= NS_PHY_INDIRECT;
+
 			slot->flags = slot_flags;
-			PNMB(na, slot, &paddr);
+
+			if (slot->flags & NS_PHY_INDIRECT)
+				paddr = slot->ptr;
+			else
+				PNMB(na, slot, &paddr);
 			netmap_sync_map_cpu(na, (bus_dma_tag_t) na->pdev,
 					&paddr, slot->len, NR_RX);
 
@@ -580,10 +599,15 @@ i40e_netmap_rxsync(struct netmap_kring *kring, int flags)
 		nic_i = netmap_idx_k2n(kring, nm_i);
 		for (n = 0; nm_i != head; n++) {
 			struct netmap_slot *slot = &ring->slot[nm_i];
-			uint64_t paddr;
-			void *addr = PNMB(na, slot, &paddr);
-
 			union i40e_rx_desc *curr = I40E_RX_DESC(rxr, nic_i);
+			uint64_t paddr;
+			void * addr;
+
+			if (slot->flags & NS_PHY_INDIRECT) {
+				addr = phys_to_virt(slot->ptr);
+				paddr = slot->ptr;
+			} else
+				addr = PNMB(na, slot, &paddr);
 
 			if (addr == NETMAP_BUF_BASE(na)) /* bad buf */
 				goto ring_reset;
