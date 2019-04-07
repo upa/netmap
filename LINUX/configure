@@ -451,14 +451,14 @@ SRCDIR=$SRCDIR
 ifneq (\$(KERNELRELEASE),)
 obj-m := $TESTOBJS
 else
-EXTRA_CFLAGS :=
+EXTRA_CFLAGS := -Werror -Wno-error=unused-but-set-variable
 S_DRIVERS := $(drv print)
 E_DRIVERS := $(edrv print)
 I_DRIVERS := $(idrv print)
 all: \$(S_DRIVERS:%=get-%) \$(E_DRIVERS:%=build-%) \$(I_DRIVERS:%=patch-%) tests
 
 tests:
-	\$(MAKE) -C $ksrc M=\$\$PWD EXTRA_CFLAGS=-Werror $kopts
+	\$(MAKE) -C $ksrc M=\$\$PWD EXTRA_CFLAGS="\$(EXTRA_CFLAGS)" $kopts
 
 -include $BUILDDIR/extdrv-versions.mak
 -include $BUILDDIR/default-config.mak
@@ -1649,6 +1649,15 @@ EOF
 	unsigned int
 	dummy(const struct u64_stats_sync *x) {
 		return u64_stats_fetch_begin_irq(x);
+	}
+EOF
+
+  add_test 'have DO_GETTIMEOFDAY' <<EOF
+	#include <linux/time.h>
+
+	void
+	dummy(struct timeval *tv) {
+		do_gettimeofday(tv);
 	}
 EOF
 
