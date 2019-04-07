@@ -329,7 +329,13 @@ ixgbe_netmap_txsync(struct netmap_kring *kring, int flags)
 			struct netmap_slot *slot = &ring->slot[nm_i];
 			u_int len = slot->len;
 			uint64_t paddr;
-			void *addr = PNMB(na, slot, &paddr);
+			void *addr;
+
+			if (slot->flags & NS_PHY_INDIRECT) {
+				addr = phys_to_virt(slot->ptr);
+				paddr = slot->ptr;
+			} else
+				addr = PNMB(na, slot, &paddr);
 
 			/* device-specific */
 			union ixgbe_adv_tx_desc *curr = NM_IXGBE_TX_DESC(txr, nic_i);
@@ -482,7 +488,11 @@ ixgbe_netmap_txsync(struct netmap_kring *kring, int flags)
 	for ( ; tosync != nm_i; tosync = nm_next(tosync, lim)) {
 		struct netmap_slot *slot = &ring->slot[tosync];
 		uint64_t paddr;
-		(void)PNMB(na, slot, &paddr);
+
+		if (slot->flags & NS_PHY_INDIRECT)
+			paddr = slot->ptr;
+		else
+			(void)PNMB(na, slot, &paddr);
 
 		netmap_sync_map_cpu(na, (bus_dma_tag_t) na->pdev,
 				&paddr, slot->len, NR_TX);
@@ -570,7 +580,12 @@ ixgbe_netmap_rxsync(struct netmap_kring *kring, int flags)
 			slot->len = size;
 			complete = staterr & IXGBE_RXD_STAT_EOP;
 			slot->flags = complete ? 0 : NS_MOREFRAG;
-			PNMB(na, slot, &paddr);
+
+			if (slot->flags & NS_PHY_INDIRECT)
+				paddr = slot->ptr;
+			else
+				PNMB(na, slot, &paddr);
+
 			netmap_sync_map_cpu(na, (bus_dma_tag_t) na->pdev,
 					&paddr, size, NR_RX);
 
@@ -609,7 +624,13 @@ ixgbe_netmap_rxsync(struct netmap_kring *kring, int flags)
 		for (n = 0; nm_i != head; n++) {
 			struct netmap_slot *slot = &ring->slot[nm_i];
 			uint64_t paddr;
-			void *addr = PNMB(na, slot, &paddr);
+			void *addr;
+
+			if (slot->flags & NS_PHY_INDIRECT) {
+				paddr = slot->ptr;
+				addr = phys_to_virt(slot->ptr);
+			} else
+				addr = PNMB(na, slot, &paddr);
 
 			union ixgbe_adv_rx_desc *curr = NM_IXGBE_RX_DESC(rxr, nic_i);
 			if (addr == NETMAP_BUF_BASE(na)) /* bad buf */
